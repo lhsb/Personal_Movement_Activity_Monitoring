@@ -1,0 +1,117 @@
+Assignment 1
+========================================================
+
+## Loading and preprocessing the data
+
+### Load libraries and data
+
+```{r load, message=FALSE, results='hide'}
+require(data.table)
+require(ggplot2)
+require(gridExtra)
+require(scales)
+activity = data.table(read.csv("activity.csv"))
+Sys.setlocale(locale="en_US.UTF-8")
+```
+
+### The data.table 'activity'
+
+```{r show data.table}
+activity
+```
+
+## What is mean total number of steps taken per day?
+
+### Histogram of the total number of steps taken each day
+
+```{r histogram}
+steps.summary = activity[, list(steps.per.day=sum(steps, na.rm=T)), by=date]
+ggplot(aes(x = steps.per.day), data = steps.summary) +
+    geom_histogram(binwidth=2500)
+```
+
+### Calculate the mean and median total number of steps taken per day
+
+```{r mean and median of steps taken per day}
+activity[, sum(steps, na.rm=T), by=date][,list(mean=mean(V1), median=median(V1))]
+```
+
+## What is the average daily activity pattern?
+
+```{r daily activity pattern}
+average.day = activity[, list(steps_mean=mean(steps, na.rm=T)), by=interval]
+average.day$time = seq(c(ISOdate(2000,3,20,23,0,0)), by = "5 min", length.out = 288)
+
+ggplot(data=average.day, aes(x=time, y=steps_mean)) +
+    geom_line() +
+    scale_x_datetime(breaks="2 hours",
+                     labels = date_format("%H:%M"))
+```
+
+### Average maximum steps time interval
+
+```{r maximum steps interval}
+average.day$time = format(seq(c(ISOdate(2000,3,20,23,0,0)), by = "5 min", length.out = 288), "%H:%M")
+average.day[order(-steps_mean)][1]
+```
+
+## Imputing missing values
+
+### Sum NA's
+
+```{r sum NAs}
+sum(is.na(activity))
+```
+
+### Impute the mean for that 5-minute interval
+
+```{r impute mean of interval}
+activity.imputed = activity
+activity.imputed = merge(activity.imputed, average.day, by=c('interval'))
+activity.imputed[is.na(steps)]$steps = as.integer(round(activity.imputed[is.na(steps)]$steps_mean))
+activity.imputed
+```
+
+### Histogram of the total number of steps taken each day - imputed dataset
+
+```{r histogram imputed data}
+steps.summary = activity.imputed[, list(steps.per.day=sum(steps, na.rm=T)), by=date]
+ggplot(aes(x = steps.per.day), data = steps.summary) +
+    geom_histogram(binwidth=2500)
+```
+
+### Calculate the mean and median total number of steps taken per day - imputed dataset
+
+```{r mean and median of steps taken per day imputed data}
+activity.imputed[, sum(steps, na.rm=T), by=date][,list(mean=mean(V1), median=median(V1))]
+```
+
+## Differences in activity patterns between weekdays and weekends
+
+```{r Differences in activity patterns between weekdays and weekends, fig.width=14, fig.height=10}
+activity.imputed$weekDay = weekdays(as.Date(activity.imputed$date))
+setkey(activity.imputed, weekDay)
+
+# prepare weekend dataset
+weekendActivity = activity.imputed[J(c('Saturday','Sunday')),
+                                   list(steps_mean= mean(steps)), by=interval]
+weekendActivity$time = seq(c(ISOdate(2000,3,20,23,0,0)), by = "5 min", length.out = 288)
+
+# prepare weekend plot
+plot1 = ggplot(data=weekendActivity, aes(x=time, y=steps_mean)) +
+    geom_line() + ggtitle("Weekend") +
+    scale_x_datetime(breaks="2 hours",
+                     labels = date_format("%H:%M"))
+
+# prepare week dataset
+weekActivity = activity.imputed[J(c('Monday','Tuesday','Wednesday','Thursday','Friday')),
+                                list(steps_mean= mean(steps)), by=interval]
+weekActivity$time = seq(c(ISOdate(2000,3,20,23,0,0)), by = "5 min", length.out = 288)
+
+# prepare week plot
+plot2 = ggplot(data=weekActivity, aes(x=time, y=steps_mean)) +
+    geom_line() + ggtitle("Weekday") +
+    scale_x_datetime(breaks="2 hours",
+                     labels = date_format("%H:%M"))
+grid.arrange(plot1, plot2, nrow=2)
+```
