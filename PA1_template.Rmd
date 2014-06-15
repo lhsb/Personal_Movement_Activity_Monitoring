@@ -3,14 +3,16 @@ Assignment 1
 
 ## Loading and preprocessing the data
 
-### Load libraries and data
+### Load libraries, data, set system
 
 ```{r load, message=FALSE, results='hide'}
 require(data.table)
 require(ggplot2)
 require(gridExtra)
 require(scales)
+
 activity = data.table(read.csv("activity.csv"))
+
 Sys.setlocale(locale="en_US.UTF-8")
 ```
 
@@ -38,7 +40,7 @@ activity[, sum(steps, na.rm=T), by=date][,list(mean=mean(V1), median=median(V1))
 
 ## What is the average daily activity pattern?
 
-```{r daily activity pattern}
+```{r daily activity pattern, fig.width=14}
 average.day = activity[, list(steps_mean=mean(steps, na.rm=T)), by=interval]
 average.day$time = seq(c(ISOdate(2000,3,20,23,0,0)), by = "5 min", length.out = 288)
 
@@ -66,16 +68,16 @@ sum(is.na(activity))
 ### Impute the mean for that 5-minute interval
 
 ```{r impute mean of interval}
-activity.imputed = activity
-activity.imputed = merge(activity.imputed, average.day, by=c('interval'))
-activity.imputed[is.na(steps)]$steps = as.integer(round(activity.imputed[is.na(steps)]$steps_mean))
-activity.imputed
+activityImputed = activity
+activityImputed = merge(activityImputed, average.day, by=c('interval'))
+activityImputed[is.na(steps)]$steps = as.integer(round(activityImputed[is.na(steps)]$steps_mean))
+activityImputed
 ```
 
 ### Histogram of the total number of steps taken each day - imputed dataset
 
 ```{r histogram imputed data}
-steps.summary = activity.imputed[, list(steps.per.day=sum(steps, na.rm=T)), by=date]
+steps.summary = activityImputed[, list(steps.per.day=sum(steps, na.rm=T)), by=date]
 ggplot(aes(x = steps.per.day), data = steps.summary) +
     geom_histogram(binwidth=2500)
 ```
@@ -83,35 +85,29 @@ ggplot(aes(x = steps.per.day), data = steps.summary) +
 ### Calculate the mean and median total number of steps taken per day - imputed dataset
 
 ```{r mean and median of steps taken per day imputed data}
-activity.imputed[, sum(steps, na.rm=T), by=date][,list(mean=mean(V1), median=median(V1))]
+activityImputed[, sum(steps, na.rm=T), by=date][,list(mean=mean(V1), median=median(V1))]
 ```
 
 ## Differences in activity patterns between weekdays and weekends
 
-```{r Differences in activity patterns between weekdays and weekends, fig.width=14, fig.height=10}
-activity.imputed$weekDay = weekdays(as.Date(activity.imputed$date))
-setkey(activity.imputed, weekDay)
+```{r Differences in activity patterns between weekdays and weekends, fig.width=14}
+# Add new variables: weekDay and weekPart
+activityImputed$weekDay = weekdays(as.Date(activityImputed$date))
+activityImputed$weekPart = "weekday"
+setkey(activityImputed, weekDay)
+activityImputed[J(c('Saturday','Sunday')), weekPart:="weekend"]
 
-# prepare weekend dataset
-weekendActivity = activity.imputed[J(c('Saturday','Sunday')),
-                                   list(steps_mean= mean(steps)), by=interval]
-weekendActivity$time = seq(c(ISOdate(2000,3,20,23,0,0)), by = "5 min", length.out = 288)
+# Create final dataset
+# summarise weekday and weekend
+activityPatterns = activityImputed[,list(steps_mean= mean(steps)), by=c("interval","weekPart")]
+# convert 'interval' to time serie
+activityPatterns$time = seq(c(ISOdate(2000,3,20,23,0,0)), by = "5 min", length.out = 288)
 
-# prepare weekend plot
-plot1 = ggplot(data=weekendActivity, aes(x=time, y=steps_mean)) +
-    geom_line() + ggtitle("Weekend") +
+# Create plot of final dataset
+ggplot(data=activityPatterns, aes(x=time, y=steps_mean)) +
+    geom_line() + ggtitle("Activity Patterns") +
     scale_x_datetime(breaks="2 hours",
-                     labels = date_format("%H:%M"))
+                     labels = date_format("%H:%M")) +
+    facet_grid(weekPart ~ .)
 
-# prepare week dataset
-weekActivity = activity.imputed[J(c('Monday','Tuesday','Wednesday','Thursday','Friday')),
-                                list(steps_mean= mean(steps)), by=interval]
-weekActivity$time = seq(c(ISOdate(2000,3,20,23,0,0)), by = "5 min", length.out = 288)
-
-# prepare week plot
-plot2 = ggplot(data=weekActivity, aes(x=time, y=steps_mean)) +
-    geom_line() + ggtitle("Weekday") +
-    scale_x_datetime(breaks="2 hours",
-                     labels = date_format("%H:%M"))
-grid.arrange(plot1, plot2, nrow=2)
 ```
